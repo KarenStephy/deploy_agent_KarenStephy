@@ -1,6 +1,6 @@
 #!/bin/bash
 #the user enters input
-echo "Enter the input you want"
+echo "Enter the project input you want"
 read input
 #check if python is installed
 if python3 --version >/dev/null 2>&1; then
@@ -21,6 +21,7 @@ cleanup() {
         echo "No project found to archive."
     fi
 }
+trap cleanup SIGINT
 #create in the Directory Architecture
 mkdir attendance_tracker_$input
 cd attendance_tracker_$input
@@ -34,7 +35,7 @@ def run_attendance_check():
     # 1. Load Config
     with open('Helpers/config.json', 'r') as f:
         config = json.load(f)
-
+    
     # 2. Archive old reports.log if it exists
     if os.path.exists('reports/reports.log'):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -44,23 +45,23 @@ def run_attendance_check():
     with open('Helpers/assets.csv', mode='r') as f, open('reports/reports.log', 'w') as log:
         reader = csv.DictReader(f)
         total_sessions = config['total_sessions']
-
+        
         log.write(f"--- Attendance Report Run: {datetime.now()} ---\n")
-
+        
         for row in reader:
             name = row['Names']
             email = row['Email']
             attended = int(row['Attendance Count'])
-
+            
             # Simple Math: (Attended / Total) * 100
             attendance_pct = (attended / total_sessions) * 100
-
+            
             message = ""
             if attendance_pct < config['thresholds']['failure']:
                 message = f"URGENT: {name}, your attendance is {attendance_pct:.1f}%. You will fail this class."
             elif attendance_pct < config['thresholds']['warning']:
                 message = f"WARNING: {name}, your attendance is {attendance_pct:.1f}%. Please be careful."
-
+            
             if message:
                 if config['run_mode'] == "live":
                     log.write(f"[{datetime.now()}] ALERT SENT TO {email}: {message}\n")
@@ -68,9 +69,11 @@ def run_attendance_check():
                 else:
                     print(f"[DRY RUN] Email to {email}: {message}")
 
+if __name__ == "__main__":
+    run_attendance_check()
 
 EOF
-mkdir -p Helpers
+mkdir Helpers
 cat <<EOF > Helpers/assets.csv
 Email,Names,Attendance Count,Absence Count
 alice@example.com,Alice Johnson,14,1
@@ -116,13 +119,15 @@ while true; do
     fi
 done
 #editing the warning and failure threshold
-sed -i '' "s/\"warning\": [0-9]\+/\"warning\": ${warning}/" Helpers/config.json
-sed -i '' "s/\"failure\": [0-9]\+/\"failure\": ${failure}/" Helpers/config.json
+sed -i "s/^\([[:space:]]*\"warning\": *\)[0-9]\+/\1$warning/" Helpers/config.json
+sed -i "s/^\([[:space:]]*\"failure\": *\)[0-9]\+/\1$failure/" Helpers/config.json
+
 
 echo "Thresholds updated."
+echo "Updated config.json"
 
 #running the python file
-python3 attendance_checker.py 
+python3 attendance_checker.py start 
 
 
 #checking if directory structure is followed
@@ -130,5 +135,5 @@ python3 attendance_checker.py
    [ -d "reports" ] && [ -f "reports/reports.log" ] && [ -f "attendance_checker.py" ]; then
     echo "Directory structure followed"
 else
-    echo "Directory structure not followed"
+    echo "Director structure not followed"
 fi
